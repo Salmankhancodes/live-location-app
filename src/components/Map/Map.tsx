@@ -1,62 +1,209 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { db } from "@/lib/firebase";
+import { doc, updateDoc, onSnapshot } from "firebase/firestore";
+import Button from "../button";
+import { useRouter } from "next/navigation";
 
-const mapTilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+export default function MapWindow({
+  sessionId,
+  mode,
+}: {
+  sessionId: string;
+  mode: "share" | "track";
+}) {
+  const mapContainer = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<"active" | "ended" | "invalid" | "loading">("loading");
+  const [ready, setReady] = useState(false);
+  const router = useRouter();
 
-export default function UserLocationMap() {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapfileKey = process.env.NEXT_PUBLIC_MAPTILER_KEY || "";
+  // ----------------------------------------
+  // MAP INITIALIZATION
+  // ----------------------------------------
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!mapContainer.current) return;
 
-    // Initialize map with any default center
     const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${mapTilerKey}`,
-      center: [0, 0],
-      zoom: 2,
+      container: mapContainer.current,
+      style:
+        `https://api.maptiler.com/maps/openstreetmap/style.json?key=${mapfileKey}`,
+      center: [77.209, 28.613], // Delhi default
+      zoom: 12,
     });
 
-    map.on("load", () => {
-      console.log("map loaded");
+    mapRef.current = map;
 
-      if (!navigator.geolocation) {
-        alert("Geolocation not supported");
+    map.on("load", () => {
+      setReady(true);
+    });
+
+    return () => {
+      map.remove();
+    };
+  }, []);
+
+  // ----------------------------------------
+  // ⭐ SHARER MODE — unchanged logic
+  // ----------------------------------------
+  useEffect(() => {
+    if (!ready) return;
+    if (mode !== "share") return;
+
+    if (!("geolocation" in navigator)) {
+      alert("Location not supported");
+      return;
+    }
+
+    const sessionRef = doc(db, "sessions", sessionId);
+    console.log("Starting share mode for session:", sessionId);
+
+    const watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        // PLACE MARKER (green)
+        if (!markerRef.current) {
+          markerRef.current = new maplibregl.Marker({ color: "green" })
+            .setLngLat([lng, lat])
+            .addTo(mapRef.current!);
+
+          mapRef.current!.flyTo({
+            center: [lng, lat],
+            zoom: 15,
+          });
+        } else {
+          markerRef.current.setLngLat([lng, lat]);
+        }
+
+        // UPDATE FIRESTORE
+        await updateDoc(sessionRef, {
+          lastLocation: { lat, lng },
+          updatedAt: new Date(),
+        });
+      },
+      (err) => console.error("Location error", err),
+      { enableHighAccuracy: true }
+    );
+
+    watchIdRef.current = watchId;
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, [ready, mode, sessionId]);
+
+  // ----------------------------------------
+  // ⭐ TRACKER MODE — NEW LOGIC
+  // ----------------------------------------
+  useEffect(() => {
+    if (!ready) return;
+    if (mode !== "track") return;
+
+    const sessionRef = doc(db, "sessions", sessionId);
+
+    // Realtime listener for sharer updates
+    const unsub = onSnapshot(sessionRef, (snap) => {
+      if (!snap.exists()) {
+        setSessionStatus("invalid");
         return;
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          const userLoc: [number, number] = [longitude, latitude];
-          console.log("User location:", userLoc);
+      const data = snap.data();
 
-          // Jump to user location
-          map.flyTo({
-            center: userLoc,
-            zoom: 16,
-            speed: 1.2,
-          });
+      // ❌ Sharer has stopped sharing
+      if (data.isActive === false) {
+        setSessionStatus("ended");
 
-          // Add marker at user location
-          new maplibregl.Marker({ color: "red" })
-            .setLngLat(userLoc)
-            .addTo(map);
-        },
-        (err) => {
-          console.error(err);
-          alert("Error fetching location");
-        },
-        {
-          enableHighAccuracy: true,
+        if (markerRef.current) {
+          markerRef.current.remove();
+          markerRef.current = null;
         }
-      );
+
+        return;
+      }
+
+      // 🟢 Sharer is active → track location
+      setSessionStatus("active");
+
+      const loc = data.lastLocation;
+      if (!loc || !loc.lat || !loc.lng) return;
+
+      // Place or update tracker marker
+      if (!markerRef.current) {
+        markerRef.current = new maplibregl.Marker({ color: "blue" })
+          .setLngLat([loc.lng, loc.lat])
+          .addTo(mapRef.current!);
+
+        mapRef.current!.flyTo({
+          center: [loc.lng, loc.lat],
+          zoom: 15,
+        });
+      } else {
+        markerRef.current.setLngLat([loc.lng, loc.lat]);
+      }
     });
 
-    return () => map.remove();
-  }, []);
-  return <div ref={containerRef} className="w-full h-full" />;
+    return () => {
+      unsub();
+    };
+  }, [ready, mode, sessionId]);
+  // ------------------------------
+  // ⭐ STOP SHARING HANDLER
+  // ------------------------------
+  const handleStopSharing = async () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
 
+    if (markerRef.current) {
+      markerRef.current.remove();
+      markerRef.current = null;
+    }
+
+    const sessionRef = doc(db, "sessions", sessionId);
+    await updateDoc(sessionRef, {
+      isActive: false,
+      lastLocation: null,
+      endedAt: new Date(),
+    });
+
+    alert("Location sharing stopped.");
+    router.push("/share-location");
+  };
+
+  return (
+    <div className="w-full h-[80vh] relative">
+      {mode === "share" && <Button style={{ position: "absolute", zIndex: 10, top: 30, right: 30 }} onClick={handleStopSharing}>Stop Sharing</Button>}
+      {mode === "track" && sessionStatus === "loading" && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded">
+          Connecting…
+        </div>
+      )}
+
+      {mode === "track" && sessionStatus === "invalid" && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded z-10">
+          Invalid session ID ❌
+        </div>
+      )}
+
+      {mode === "track" && sessionStatus === "ended" && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white px-4 py-2 rounded z-10">
+          Sharer has stopped sharing 🚫
+        </div>
+      )}
+
+      <div ref={mapContainer} className="w-full h-full relative" />
+    </div>
+  );
 }
