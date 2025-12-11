@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { doc, updateDoc, onSnapshot } from "firebase/firestore";
 import Button from "../button";
 import { useRouter } from "next/navigation";
+import { getSession } from "@/lib/firebase/db";
 
 export default function MapWindow({
   sessionId,
@@ -48,6 +49,31 @@ export default function MapWindow({
       map.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (mode !== "share") return;
+
+    const verifyOwner = async () => {
+      const session = await getSession(sessionId);
+      const currentUid = auth.currentUser?.uid;
+
+      if (!session) {
+        alert("Session does not exist.");
+        router.replace("/share");
+        return;
+      }
+
+      if (session.owner !== currentUid) {
+        alert("You are not the owner of this session. Switching to tracker mode.");
+        router.replace(`/track-location/${sessionId}`);
+        return;
+      }
+
+      // Owner verified → continue normal sharer logic
+    };
+
+    verifyOwner();
+  }, [mode, sessionId]);
 
   // ----------------------------------------
   // ⭐ SHARER MODE — unchanged logic

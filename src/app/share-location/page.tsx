@@ -4,6 +4,7 @@ import { createSession, getSession } from "@/lib/firebase/db";
 import { useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import Button from "@/components/button";
+import { onAuthReady } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 
 export default function ShareLocation() {
@@ -27,6 +28,12 @@ export default function ShareLocation() {
     didRun.current = true;
 
     const setup = async () => {
+
+      // Wait for auth to be ready and provide uid (or null)
+      await new Promise<void>((resolve) => {
+        onAuthReady(() => resolve());
+      });
+
       const existingSessionId = localStorage.getItem("sessionId");
       if (existingSessionId) {
         console.log("Existing session found:", existingSessionId);
@@ -52,8 +59,10 @@ export default function ShareLocation() {
         return;
       }
     };
-
-    setup();
+    setup().catch((e) => {
+      console.error("Session setup error", e);
+      setLoading(false);
+    });
   }, []);
 
 

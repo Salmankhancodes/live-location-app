@@ -1,6 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -21,3 +22,17 @@ const firebaseConfig = {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+// Immediately sign in anonymously (no UI)
+signInAnonymously(auth).catch((err) => {
+  console.error("Anonymous sign-in failed", err);
+});
+
+// optional: export a helper to await auth ready
+export function onAuthReady(cb: (userId: string | null) => void) {
+  const unsub = onAuthStateChanged(auth, (user) => {
+    cb(user ? user.uid : null);
+    // You can keep unsubbing if you only want the first call:
+    // unsub();
+  });
+}
