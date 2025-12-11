@@ -1,5 +1,79 @@
 @import "tailwindcss";
 
+@layer utilities {
+
+  /* Background colors */
+  .bg-header {
+    background-color: #1B3C53;
+  }
+
+  .bg-primary {
+    background-color: #234C6A;
+  }
+
+  .bg-secondary {
+    background-color: #456882;
+  }
+
+  .bg-surface {
+    background-color: #E3E3E3;
+  }
+
+  .bg-canvas {
+    background-color: #FFFFFF;
+  }
+
+  /* Text colors */
+  .text-header {
+    color: #1B3C53;
+  }
+
+  .text-primary {
+    color: #234C6A;
+  }
+
+  .text-secondary {
+    color: #456882;
+  }
+
+  .text-surface {
+    color: #E3E3E3;
+  }
+
+  .text-canvas {
+    color: #FFFFFF;
+  }
+
+  /* Hover states */
+  .hover-text-primary:hover {
+    color: #234C6A;
+  }
+
+  .hover-bg-primary:hover {
+    background-color: #234C6A;
+  }
+
+  /* Transition */
+  .transition-smooth {
+    transition: all 0.2s ease-in-out;
+  }
+
+  /* Padding & rounded */
+  .px-2 {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  .py-1 {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .rounded {
+    border-radius: 0.25rem;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
