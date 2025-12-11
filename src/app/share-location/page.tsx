@@ -28,8 +28,6 @@ export default function ShareLocation() {
     didRun.current = true;
 
     const setup = async () => {
-
-      // Wait for auth to be ready and provide uid (or null)
       await new Promise<void>((resolve) => {
         onAuthReady(() => resolve());
       });
@@ -38,25 +36,17 @@ export default function ShareLocation() {
       if (existingSessionId) {
         console.log("Existing session found:", existingSessionId);
         const session = await getSession(existingSessionId);
-        console.log("Fetched session data:", session);
         if (session && session.isActive === true) {
           setSessionId(existingSessionId);
           setLoading(false);
-          console.log("Reusing existing active session.");
           return;
-        }
-        else {
-          console.log("Existing session is inactive or does not exist. Removing stored session ID.");
+        } else {
           localStorage.removeItem("sessionId");
           await createNewSessionAndUpdateLocalStorage();
           return;
         }
-      }
-      else {
-        console.log("No existing session found. Creating a new one.");
-        const newId = nanoid(10);
+      } else {
         await createNewSessionAndUpdateLocalStorage();
-        return;
       }
     };
     setup().catch((e) => {
@@ -65,18 +55,52 @@ export default function ShareLocation() {
     });
   }, []);
 
-
   const handleStartSharing = () => {
     if (!sessionId) return;
     router.push(`/share-location/${sessionId}`);
   };
 
-  if (loading) return <div>Initializing session...</div>;
+  const handleCopySessionId = () => {
+    if (!sessionId) return;
+    navigator.clipboard.writeText(sessionId);
+    alert("Session ID copied!");
+  };
+
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-full text-secondary">
+        Initializing session...
+      </div>
+    );
 
   return (
-    <div>
-      Sharing screen — session initialized!
-      <Button onClick={handleStartSharing} className="mt-4">
+    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+      <h2 className="text-2xl font-semibold text-header mb-4">
+        Your Live Location Session
+      </h2>
+
+      <p className="text-secondary mb-6">
+        Share this session ID with anyone who wants to track you:
+      </p>
+
+      {sessionId && (
+        <div className="flex flex-col sm:flex-row items-center gap-4 mb-6">
+          <span className="font-mono bg-surface px-4 py-2 rounded text-header">
+            {sessionId}
+          </span>
+          <Button
+            onClick={handleCopySessionId}
+            className="bg-primary text-canvas px-4 py-2 rounded"
+          >
+            Copy
+          </Button>
+        </div>
+      )}
+
+      <Button
+        onClick={handleStartSharing}
+        className="bg-primary text-canvas px-6 py-3 rounded-lg"
+      >
         Open Map
       </Button>
     </div>

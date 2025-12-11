@@ -33,23 +33,22 @@ export default function MapWindow({
 
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style:
-        `https://api.maptiler.com/maps/openstreetmap/style.json?key=${mapfileKey}`,
-      center: [77.209, 28.613], // Delhi default
+      style: `https://api.maptiler.com/maps/streets-v4/style.json?key=${mapfileKey}`,
+      center: [77.209, 28.613],
       zoom: 12,
+      attributionControl: false,
     });
 
     mapRef.current = map;
 
-    map.on("load", () => {
-      setReady(true);
-    });
+    map.on("load", () => setReady(true));
 
-    return () => {
-      map.remove();
-    };
+    return () => map.remove();
   }, []);
 
+  // -------------------------------
+  // VERIFY OWNER (Sharer only)
+  // -------------------------------
   useEffect(() => {
     if (mode !== "share") return;
 
@@ -58,86 +57,64 @@ export default function MapWindow({
       const currentUid = auth.currentUser?.uid;
 
       if (!session) {
-        alert("Session does not exist.");
-        router.replace("/share");
+        router.replace("/share-location");
         return;
       }
 
       if (session.owner !== currentUid) {
-        alert("You are not the owner of this session. Switching to tracker mode.");
         router.replace(`/track-location/${sessionId}`);
         return;
       }
-
-      // Owner verified → continue normal sharer logic
     };
 
     verifyOwner();
   }, [mode, sessionId]);
 
-  // ----------------------------------------
-  // ⭐ SHARER MODE — unchanged logic
-  // ----------------------------------------
+  // -------------------------------
+  // SHARER MODE
+  // -------------------------------
   useEffect(() => {
-    if (!ready) return;
-    if (mode !== "share") return;
-
-    if (!("geolocation" in navigator)) {
-      alert("Location not supported");
-      return;
-    }
+    if (!ready || mode !== "share") return;
+    if (!("geolocation" in navigator)) return;
 
     const sessionRef = doc(db, "sessions", sessionId);
-    console.log("Starting share mode for session:", sessionId);
 
     const watchId = navigator.geolocation.watchPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
 
-        // PLACE MARKER (green)
         if (!markerRef.current) {
-          markerRef.current = new maplibregl.Marker({ color: "green" })
+          markerRef.current = new maplibregl.Marker({ color: "#4ade80" })
             .setLngLat([lng, lat])
             .addTo(mapRef.current!);
+          mapRef.current!.flyTo({ center: [lng, lat], zoom: 15 });
+        } else markerRef.current.setLngLat([lng, lat]);
 
-          mapRef.current!.flyTo({
-            center: [lng, lat],
-            zoom: 15,
-          });
-        } else {
-          markerRef.current.setLngLat([lng, lat]);
-        }
-
-        // UPDATE FIRESTORE
         await updateDoc(sessionRef, {
           lastLocation: { lat, lng },
           updatedAt: new Date(),
         });
       },
-      (err) => console.error("Location error", err),
+      (err) => console.error(err),
       { enableHighAccuracy: true }
     );
 
     watchIdRef.current = watchId;
 
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
   }, [ready, mode, sessionId]);
 
-  // ----------------------------------------
-  // ⭐ TRACKER MODE — NEW LOGIC
-  // ----------------------------------------
+  // -------------------------------
+  // TRACKER MODE
+  // -------------------------------
   useEffect(() => {
-    if (!ready) return;
-    if (mode !== "track") return;
+    if (!ready || mode !== "track") return;
 
     const sessionRef = doc(db, "sessions", sessionId);
 
-    // Realtime listener for sharer updates
     const unsub = onSnapshot(sessionRef, (snap) => {
       if (!snap.exists()) {
         setSessionStatus("invalid");
@@ -146,90 +123,80 @@ export default function MapWindow({
 
       const data = snap.data();
 
-      // ❌ Sharer has stopped sharing
       if (data.isActive === false) {
         setSessionStatus("ended");
-
-        if (markerRef.current) {
-          markerRef.current.remove();
-          markerRef.current = null;
-        }
-
+        markerRef.current?.remove();
+        markerRef.current = null;
         return;
       }
 
-      // 🟢 Sharer is active → track location
       setSessionStatus("active");
 
       const loc = data.lastLocation;
-      if (!loc || !loc.lat || !loc.lng) return;
+      if (!loc?.lat || !loc?.lng) return;
 
-      // Place or update tracker marker
       if (!markerRef.current) {
-        markerRef.current = new maplibregl.Marker({ color: "blue" })
+        markerRef.current = new maplibregl.Marker({ color: "#60a5fa" })
           .setLngLat([loc.lng, loc.lat])
           .addTo(mapRef.current!);
-
-        mapRef.current!.flyTo({
-          center: [loc.lng, loc.lat],
-          zoom: 15,
-        });
-      } else {
-        markerRef.current.setLngLat([loc.lng, loc.lat]);
-      }
+        mapRef.current!.flyTo({ center: [loc.lng, loc.lat], zoom: 15 });
+      } else markerRef.current.setLngLat([loc.lng, loc.lat]);
     });
 
-    return () => {
-      unsub();
-    };
+    return () => unsub();
   }, [ready, mode, sessionId]);
-  // ------------------------------
-  // ⭐ STOP SHARING HANDLER
-  // ------------------------------
-  const handleStopSharing = async () => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
 
-    if (markerRef.current) {
-      markerRef.current.remove();
-      markerRef.current = null;
-    }
+  // -------------------------------
+  // STOP SHARING BUTTON
+  // -------------------------------
+  const handleStopSharing = async () => {
+    navigator.geolocation.clearWatch(watchIdRef.current!);
+    watchIdRef.current = null;
+
+    markerRef.current?.remove();
+    markerRef.current = null;
 
     const sessionRef = doc(db, "sessions", sessionId);
-    await updateDoc(sessionRef, {
-      isActive: false,
-      lastLocation: null,
-      endedAt: new Date(),
-    });
+    await updateDoc(sessionRef, { isActive: false, lastLocation: null, endedAt: new Date() });
 
-    alert("Location sharing stopped.");
     router.push("/share-location");
   };
 
   return (
-    <div className="w-full h-[80vh] relative">
-      {mode === "share" && <Button style={{ position: "absolute", zIndex: 10, top: 30, right: 30 }} onClick={handleStopSharing}>Stop Sharing</Button>}
-      {mode === "track" && sessionStatus === "loading" && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-yellow-500 text-white px-4 py-2 rounded">
-          Connecting…
+    <div className="w-full h-[80vh] relative bg-gray-50 rounded-lg shadow-lg overflow-hidden">
+      {/* STOP SHARING BUTTON */}
+      {mode === "share" && (
+        <button
+          className="absolute top-4 right-4 z-20 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+          onClick={handleStopSharing}
+        >
+          Stop Sharing
+        </button>
+      )}
+
+      {/* STATUS TOAST */}
+      {mode === "track" && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+          {sessionStatus === "loading" && (
+            <div className="bg-yellow-400 text-gray-900 px-4 py-2 rounded shadow-lg animate-pulse">
+              Connecting…
+            </div>
+          )}
+          {sessionStatus === "invalid" && (
+            <div className="bg-red-600 text-white px-4 py-2 rounded shadow-lg">
+              Invalid session ID ❌
+            </div>
+          )}
+          {sessionStatus === "ended" && (
+            <div className="bg-gray-800 text-white px-4 py-2 rounded shadow-lg">
+              Sharer has stopped sharing 🚫
+            </div>
+          )}
         </div>
       )}
 
-      {mode === "track" && sessionStatus === "invalid" && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded z-10">
-          Invalid session ID ❌
-        </div>
-      )}
-
-      {mode === "track" && sessionStatus === "ended" && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-gray-700 text-white px-4 py-2 rounded z-10">
-          Sharer has stopped sharing 🚫
-        </div>
-      )}
-
-      <div ref={mapContainer} className="w-full h-full relative" />
+      {/* MAP */}
+      <div ref={mapContainer} className="w-full h-full" />
     </div>
   );
 }
