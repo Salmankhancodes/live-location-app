@@ -4,40 +4,52 @@
 
   /* Background colors */
   .bg-header {
-    background-color: #1B3C53;
+    background-color: #0B1221;
   }
 
+  /* deep navy */
   .bg-primary {
-    background-color: #234C6A;
+    background-color: #16263A;
   }
 
+  /* dark blue surface */
   .bg-secondary {
-    background-color: #456882;
+    background-color: #1F2F46;
   }
 
+  /* muted blue */
   .bg-surface {
-    background-color: #E3E3E3;
+    background-color: #E4E8EB;
   }
 
+  /* soft light grey */
   .bg-canvas {
     background-color: #FFFFFF;
   }
 
+  .bg-accent {
+    background-color: #3EC6D0;
+  }
+
+  .text-accent {
+    color: #3EC6D0;
+  }
+
   /* Text colors */
   .text-header {
-    color: #1B3C53;
+    color: #0B1221;
   }
 
   .text-primary {
-    color: #234C6A;
+    color: #16263A;
   }
 
   .text-secondary {
-    color: #456882;
+    color: #1F2F46;
   }
 
   .text-surface {
-    color: #E3E3E3;
+    color: #E4E8EB;
   }
 
   .text-canvas {
@@ -46,33 +58,21 @@
 
   /* Hover states */
   .hover-text-primary:hover {
-    color: #234C6A;
+    color: #3EC6D0;
   }
 
+  /* cyan on hover */
   .hover-bg-primary:hover {
-    background-color: #234C6A;
+    background-color: #1F2F46;
   }
 
-  /* Transition */
+  /* Smooth transitions */
   .transition-smooth {
     transition: all 0.2s ease-in-out;
   }
-
-  /* Padding & rounded */
-  .px-2 {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-  }
-
-  .py-1 {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
-  }
-
-  .rounded {
-    border-radius: 0.25rem;
-  }
 }
+
+
 
 :root {
   --background: #ffffff;
