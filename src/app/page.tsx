@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import Globe from "@/components/globe";
+import dynamic from "next/dynamic";
 import LiveBadge from "@/components/livebadge";
 import Link from "next/link";
 
@@ -14,6 +14,17 @@ export default function Home() {
   if (!isMounted) {
     return null;
   }
+  /**
+   * Dynamically import the Globe component with SSR disabled
+   * and a custom loading placeholder.
+   * This is done to improve performance and avoid SSR issues with 3D rendering.
+   */
+  const Globe = dynamic(() => import("@/components/globe"), {
+    ssr: false,
+    loading: () => (
+      <div className="w-[300px] h-[300px] sm:w-[360px] sm:h-[360px] rounded-full bg-gradient-to-br from-primary/30 via-primary/10 to-transparent animate-pulse blur-xl" />
+    ),
+  });
 
   return (
     <div className="flex flex-col items-center justify-center px-4 sm:px-6 py-10 text-center mt-6 sm:mt-10 min-h-screen relative overflow-hidden">
@@ -41,7 +52,7 @@ export default function Home() {
             </button>
           </Link>
         </div>
-        <div className="w-full flex justify-center">
+        <div className="w-full flex justify-center items-center min-h-[360px]">
           <Globe />
         </div>
       </div>

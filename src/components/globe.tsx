@@ -7,7 +7,7 @@ import './globe.css'
 
 const Globe = () => {
   return (
-    <div className='globe-container'>
+    <div className='globe-container animate-fadeIn'>
       <div id="earth" ></div>
     </div>
   )
