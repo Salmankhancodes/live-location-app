@@ -1,0 +1,3 @@
+{
+  "ignoreCommand": "if [ -d functions ]; then exit 0; fi"
+}
