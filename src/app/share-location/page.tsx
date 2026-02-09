@@ -35,10 +35,20 @@ export default function ShareLocation() {
   useEffect(() => {
     const init = async () => {
       try {
-        // 1️⃣ Wait for auth
+        // 1️⃣ Wait for auth (with 10s timeout)
         await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const timeout = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              reject(new Error("Auth timeout"));
+            }
+          }, 10000);
           onAuthReady((user) => {
-            if (!user) reject();
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            if (!user) reject(new Error("Auth failed"));
             else resolve();
           });
         });
@@ -80,22 +90,50 @@ export default function ShareLocation() {
   // ACTIONS
   // ----------------------------------
   const handleCreateSession = async () => {
+    // Pre-check geolocation support
+    if (!("geolocation" in navigator)) {
+      alert("Your browser does not support geolocation. Location sharing requires GPS access.");
+      return;
+    }
+
+    // Pre-check if location permission is already denied
+    try {
+      const permResult = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+      if (permResult.state === "denied") {
+        alert("Location permission is blocked. Please enable it in your browser settings to share your location.");
+        return;
+      }
+    } catch {
+      // Permissions API not supported — continue anyway
+    }
+
     setPageState("creating");
 
-    const newId = nanoid(10);
-    await createSession(newId);
+    try {
+      const newId = nanoid(10);
+      await createSession(newId);
 
-    localStorage.setItem("sessionId", newId);
-    setSessionId(newId);
-    setPageState("active");
+      localStorage.setItem("sessionId", newId);
+      setSessionId(newId);
+      setPageState("active");
+    } catch (err) {
+      console.error("Failed to create session:", err);
+      setPageState("no-session");
+      alert("Failed to create session. Please check your connection and try again.");
+    }
   };
 
   const handleStopSession = async () => {
     if (!sessionId) return;
 
-    await stopSession(sessionId);
-    localStorage.removeItem("sessionId");
+    try {
+      await stopSession(sessionId);
+    } catch (err) {
+      console.error("Failed to stop session:", err);
+    }
 
+    // Always clean up local state even if the remote call fails
+    localStorage.removeItem("sessionId");
     setSessionId(null);
     setPageState("session-inactive");
   };

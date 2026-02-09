@@ -32,7 +32,7 @@ signInAnonymously(auth).catch((err) => {
 export function onAuthReady(cb: (userId: string | null) => void) {
   const unsub = onAuthStateChanged(auth, (user) => {
     cb(user ? user.uid : null);
-    // You can keep unsubbing if you only want the first call:
-    // unsub();
+    unsub();
   });
+  return unsub;
 }

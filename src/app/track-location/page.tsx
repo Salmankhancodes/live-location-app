@@ -9,11 +9,16 @@ export default function TrackPage() {
   const [sessionId, setSessionId] = useState("");
 
   const handleTrack = () => {
-    if (!sessionId.trim()) {
+    const trimmed = sessionId.trim();
+    if (!trimmed) {
       alert("Please enter a valid session ID");
       return;
     }
-    router.push(`/track-location/${sessionId.trim()}`);
+    if (trimmed.length > 50 || /[/.#$\[\]]/.test(trimmed)) {
+      alert("Invalid session ID format. Please check and try again.");
+      return;
+    }
+    router.push(`/track-location/${trimmed}`);
   };
 
   return (
